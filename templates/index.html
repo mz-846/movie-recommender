@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Movie Recommender</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0f0e13; --panel: #18161f; --panel-2: #211e2a; --line: #2e2a3a;
+      --text: #ece8f4; --muted: #9c95ad; --accent: #f5b942; --accent-ink: #1a1405; --danger: #ff7a7a;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 Inter, system-ui, sans-serif; }
+    .wrap { max-width: 1120px; margin: 0 auto; padding: 32px 16px 64px; }
+    header h1 { font-family: Fraunces, Georgia, serif; font-weight: 800; font-size: clamp(30px, 5vw, 46px);
+                letter-spacing: -0.02em; margin: 0 0 6px; }
+    header h1 span { color: var(--accent); }
+    header p { color: var(--muted); margin: 0 0 28px; max-width: 640px; }
+    .tabs { display: flex; gap: 6px; margin-bottom: -1px; }
+    .tab { padding: 10px 16px; border: 1px solid var(--line); border-bottom: none; border-radius: 10px 10px 0 0;
+           background: transparent; color: var(--muted); font: 600 14px Inter, sans-serif; cursor: pointer; }
+    .tab.active { background: var(--panel); color: var(--text); }
+    .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 0 12px 12px 12px; padding: 22px; }
+    .panel[hidden] { display: none; }
+    label { display: block; font-weight: 600; margin-bottom: 8px; }
+    .hint { color: var(--muted); font-size: 13px; margin: 4px 0 14px; }
+    .row { display: flex; gap: 10px; flex-wrap: wrap; }
+    input[type=text] { flex: 1 1 240px; min-width: 0; padding: 12px 14px; border-radius: 10px; border: 1px solid var(--line);
+                       background: var(--panel-2); color: var(--text); font: 15px Inter, sans-serif; }
+    input[type=text]:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+    .picks { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; margin-bottom: 14px; }
+    button.go { padding: 12px 20px; border: none; border-radius: 10px; background: var(--accent); color: var(--accent-ink);
+                font: 700 15px Inter, sans-serif; cursor: pointer; }
+    button.go:hover { filter: brightness(1.08); }
+    .error { margin-top: 16px; color: var(--danger); }
+    h2 { font-family: Fraunces, Georgia, serif; font-weight: 600; font-size: 24px; margin: 36px 0 16px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 18px; }
+    .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; display: flex; flex-direction: column; }
+    .poster { aspect-ratio: 2 / 3; width: 100%; object-fit: cover; display: block; background: var(--panel-2); }
+    .ph { aspect-ratio: 2 / 3; display: grid; place-items: center; font: 800 44px Fraunces, serif; color: var(--accent);
+          background: radial-gradient(circle at 30% 20%, #3a2f55, #18161f 70%); }
+    .body { padding: 12px; display: flex; flex-direction: column; gap: 4px; flex: 1; }
+    .title { font-weight: 600; line-height: 1.25; }
+    .meta { color: var(--muted); font-size: 12.5px; }
+    .ov { color: var(--muted); font-size: 12.5px; margin-top: 4px; }
+    .star { color: var(--accent); }
+    footer { margin-top: 48px; color: var(--muted); font-size: 12.5px; }
+    footer code { color: var(--text); }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>What to watch <span>next</span></h1>
+    <p>Content-based and hybrid recommendations across 4,803 films (TMDB 5000), with collaborative signals from 100k MovieLens ratings.</p>
+  </header>
+
+  <datalist id="titles">
+    {% for movie in movie_list %}<option value="{{ movie }}">{% endfor %}
+  </datalist>
+
+  <div class="tabs" role="tablist">
+    <button class="tab {% if mode == 'similar' %}active{% endif %}" data-tab="similar" type="button">Similar films</button>
+    <button class="tab {% if mode == 'hybrid' %}active{% endif %}" data-tab="hybrid" type="button">Pick films you love</button>
+  </div>
+
+  <section class="panel" id="similar" {% if mode != 'similar' %}hidden{% endif %}>
+    <form action="/recommend" method="POST">
+      <label for="movie-select">Select a movie</label>
+      <p class="hint">Content-based: matches plot, genres, keywords, lead cast and director.</p>
+      <div class="row">
+        <input type="text" id="movie-select" name="selected_movie" list="titles" placeholder="Start typing, e.g. Inception"
+               value="{{ selected or '' }}" autocomplete="off" required>
+        <button type="submit" class="go">Get recommendations</button>
+      </div>
+    </form>
+  </section>
+
+  <section class="panel" id="hybrid" {% if mode != 'hybrid' %}hidden{% endif %}>
+    <form action="/hybrid" method="POST">
+      <label>Up to five films you love</label>
+      <p class="hint">Hybrid: {{ (weight * 100)|round|int }}% "people who watched these also watched…" + {{ ((1 - weight) * 100)|round|int }}% content similarity.</p>
+      <div class="picks">
+        {% for i in range(5) %}
+          <input type="text" name="liked_{{ i }}" list="titles" placeholder="Film {{ i + 1 }}"
+                 value="{{ liked[i] if liked else '' }}" autocomplete="off">
+        {% endfor %}
+      </div>
+      <button type="submit" class="go">Recommend for me</button>
+    </form>
+  </section>
+
+  {% if error %}<p class="error">{{ error }}</p>{% endif %}
+
+  {% if results %}
+    <h2>{{ heading }}</h2>
+    <div class="grid">
+      {% for m in results %}
+        <article class="card">
+          {% if m.poster %}<img class="poster" src="{{ m.poster }}" alt="Poster for {{ m.title }}" loading="lazy">
+          {% else %}<div class="ph" aria-hidden="true">{{ m.initials }}</div>{% endif %}
+          <div class="body">
+            <div class="title">{{ m.title }}</div>
+            <div class="meta">{{ m.year }} · <span class="star">★</span> {{ m.rating }}</div>
+            <div class="meta">{{ m.genres }}</div>
+            <div class="ov">{{ m.overview }}</div>
+          </div>
+        </article>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  <footer>
+    {% if not posters_enabled %}Posters are off — set <code>TMDB_API_KEY</code> to show them. {% endif %}
+    Data: TMDB 5000 (Kaggle) and MovieLens latest-small (GroupLens). This product uses the TMDB API but is not endorsed or certified by TMDB.
+  </footer>
+</div>
+<script>
+  document.querySelectorAll('.tab').forEach(btn => btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(b => b.classList.toggle('active', b === btn));
+    document.querySelectorAll('.panel').forEach(p => p.hidden = p.id !== btn.dataset.tab);
+  }));
+</script>
+</body>
+</html>

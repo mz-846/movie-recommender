@@ -1,0 +1,3 @@
+* text=auto
+*.pkl binary
+*.csv text eol=lf

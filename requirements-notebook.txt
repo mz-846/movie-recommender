@@ -1,0 +1,7 @@
+# Extra dependencies to re-run analysis.ipynb (install on top of requirements.txt)
+-r requirements.txt
+scikit-learn==1.9.1
+scikit-surprise==1.1.5
+matplotlib==3.11.2
+seaborn==0.13.2
+jupyter
